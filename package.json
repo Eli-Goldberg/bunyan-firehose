@@ -1,0 +1,18 @@
+{
+  "name": "bunyan-firehose",
+  "version": "0.0.1",
+  "description": "An AWS Firehose extension for the Bunyan logger",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo no tests yet"
+  },
+  "keywords": [],
+  "author": "Eli Goldberg",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "2.104.0",
+    "bunyan": "1.8.12",
+    "lodash": "4.17.4",
+    "retry": "0.10.1"
+  }
+}
