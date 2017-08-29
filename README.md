@@ -22,16 +22,18 @@ Writeable stream
       region: 'eu-west-1'
     };
 
+    const firehoseStream = createFirehoseStream(firehoseConfig);
+    firehoseStream.on('error', (err) => {
+      console.error(`Firehose log error: `, err);
+    });
+
     const logger = bunyan.createLogger({
       name: name,
       level: 'info',
       serializers: bunyan.stdSerializers,
       streams: [
         { stream: process.stdout, level: 'info' },
-        { 
-          stream: createFirehoseStream(firehoseConfig), 
-          type: 'raw' 
-        }
+        { stream: firehoseStream, type: 'raw'}
       ]
     });
 

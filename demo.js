@@ -10,13 +10,18 @@ const firehoseConfig = {
 
 function createLogger(name) {
   if (!name) throw new Error(`Missing 'name' in config`);
+  const firehoseStream = createFirehoseStream(firehoseConfig);
+  firehoseStream.on('error', (err) => {
+    console.error(`Firehose log error: `, err);
+  });
+
   const loggerConfig = {
     name: name,
     level: 'info',
     serializers: bunyan.stdSerializers,
     streams: [
       { stream: process.stdout, level: 'info' },
-      { stream: createFirehoseStream(firehoseConfig), type: 'raw' }
+      { stream: firehoseStream, type: 'raw' }
     ]
   };
   return bunyan.createLogger(loggerConfig);
