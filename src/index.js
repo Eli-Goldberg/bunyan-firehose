@@ -1,9 +1,11 @@
-const FirehoseStream = require('./firehoseStream');
+'use strict'
 
-function createFirehoseStream(...args) {
-  return new FirehoseStream(...args);
+const FirehoseStream = require('./firehoseStream')
+
+function createStream(...args) {
+  return new FirehoseStream(...args)
 }
 
 module.exports = {
-  createFirehoseStream
-};
+  createStream
+}

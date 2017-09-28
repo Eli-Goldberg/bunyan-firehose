@@ -1,6 +1,6 @@
 {
   "name": "bunyan-firehose",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "An AWS Firehose extension for the Bunyan logger",
   "main": "index.js",
   "scripts": {
@@ -8,8 +8,8 @@
   },
   "keywords": [],
   "author": "Eli Goldberg",
-  "repository": { 
-    "type" : "git", 
+  "repository": {
+    "type" : "git",
     "url" : "https://github.com/Eli-Goldberg/bunyan-firehose"
   },
   "license": "ISC",

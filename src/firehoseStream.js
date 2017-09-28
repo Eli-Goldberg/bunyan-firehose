@@ -1,47 +1,53 @@
-const AWS = require('aws-sdk');
-const { Writable } = require('stream');
-const { merge } = require('lodash');
-const retry = require('retry');
+'use strict'
+
+const AWS          = require('aws-sdk')
+const { Writable } = require('stream')
+const { merge }    = require('lodash')
+const retry        = require('retry')
 
 const defaultBuffer = {
   timeout: 5,
-  length: 10,
-  hasPriority: function () {
-    return false;
-  },
+  length:  10,
   retry: {
-    retries: 2,
+    retries:    2,
     minTimeout: 300,
     maxTimeout: 500
+  },
+  hasPriority: function () {
+    return false
   }
-};
+}
 
 class FirehoseStream extends Writable {
-  constructor({ firehose, streamName, accessKeyId, secretAccessKey, region,
-    httpOptions, objectMode, buffer, partitionKey }) {
-    super({ objectMode });
-    this.streamName = streamName;
-    this.buffer = merge(defaultBuffer, buffer);
+  constructor({ firehose, streamName, region, credentials, httpOptions, objectMode, buffer, partitionKey }) {
+    super({ objectMode })
+
+    this.streamName   = streamName
+    this.buffer       = merge(defaultBuffer, buffer)
     this.partitionKey = partitionKey || function getPartitionKey() {
-      return Date.now().toString();
-    };
+      return Date.now().toString()
+    }
 
-    this.hasPriority = this.buffer.isPrioritaryMsg || this.buffer.hasPriority;
+    this.hasPriority  = this.buffer.isPrioritaryMsg || this.buffer.hasPriority
+    this.recordsQueue = []
 
-    // increase the timeout to get credentials from the EC2 Metadata Service
-    AWS.config.credentials = new AWS.EC2MetadataCredentials({
-      httpOptions: httpOptions || { timeout: 5000 }
-    });
+    const firehoseConfig = { region, httpOptions }
 
-    this.recordsQueue = [];
+    if (credentials) {
+      const { accessKeyId, secretAccessKey, sessionToken } = credentials
+      firehoseConfig.credentials = new AWS.Credentials(accessKeyId, secretAccessKey, sessionToken)
 
-    this.firehose = firehose || new AWS.Firehose({
-      accessKeyId,
-      secretAccessKey,
-      region,
-      httpOptions
-    });
+    } else {
+      // increase the timeout to get credentials from the EC2 Metadata Service
+      AWS.config.credentials = new AWS.EC2MetadataCredentials({
+        httpOptions: httpOptions || { timeout: 5000 }
+      })
+
+    }
+
+    this.firehose = firehose || new AWS.Firehose(firehoseConfig)
   }
+
   dispatch(records, cb) {
     if (records.length === 0) {
       return cb ? cb() : null;
@@ -71,22 +77,25 @@ class FirehoseStream extends Writable {
         }
       });
     });
-  };
+  }
 
   parseChunk(chunk) {
     if (Buffer.isBuffer(chunk)) {
-      chunk = chunk.toString();
+      chunk = chunk.toString()
     }
+
     if (typeof chunk === 'string') {
-      chunk = JSON.parse(chunk);
+      chunk = JSON.parse(chunk)
     }
-    return chunk;
+
+    return chunk
   }
 
   write(chunk, enc, next) {
     chunk = this.parseChunk(chunk);
 
     const hasPriority = this.hasPriority(chunk);
+
     if (hasPriority) {
       this.recordsQueue.unshift(chunk);
     } else {
@@ -106,11 +115,6 @@ class FirehoseStream extends Writable {
     if (next) return next();
   }
 
-  emitRecordError(err, records) {
-    err.records = records;
-    this.emit('error', err);
-  };
-
   flush() {
     this.dispatch(this.recordsQueue.splice(0, this.buffer.length));
   }
@@ -119,19 +123,20 @@ class FirehoseStream extends Writable {
     const req = this.firehose.putRecordBatch({
       DeliveryStreamName: this.streamName,
       Records: records
-    }, cb);
+    }, cb)
 
     // remove all listeners which end up leaking
     req.on('complete', function () {
-      req.removeAllListeners();
-      req.response.httpResponse.stream.removeAllListeners();
-      req.httpRequest.stream.removeAllListeners();
-    });
+      req.removeAllListeners()
+      // req.response.httpResponse.stream.removeAllListeners();
+      // req.httpRequest.stream.removeAllListeners();
+    })
   }
+
   emitRecordError(err, records) {
-    err.records = records;
-    this.emit('error', err);
-  };
+    err.records = records
+    this.emit('error', err)
+  }
 }
 
-module.exports = FirehoseStream;
+module.exports = FirehoseStream
