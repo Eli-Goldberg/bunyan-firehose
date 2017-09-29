@@ -31,11 +31,8 @@ class FirehoseStream extends Writable {
     this.hasPriority  = this.buffer.isPrioritaryMsg || this.buffer.hasPriority
     this.recordsQueue = []
 
-    const firehoseConfig = { region, httpOptions }
-
     if (credentials) {
-      const { accessKeyId, secretAccessKey, sessionToken } = credentials
-      firehoseConfig.credentials = new AWS.Credentials(accessKeyId, secretAccessKey, sessionToken)
+      AWS.config.credentials = credentials
 
     } else {
       // increase the timeout to get credentials from the EC2 Metadata Service
@@ -45,22 +42,22 @@ class FirehoseStream extends Writable {
 
     }
 
-    this.firehose = firehose || new AWS.Firehose(firehoseConfig)
+    this.firehose = firehose || new AWS.Firehose({ region, httpOptions })
   }
 
   dispatch(records, cb) {
     if (records.length === 0) {
-      return cb ? cb() : null;
+      return cb ? cb() : null
     }
 
-    const operation = retry.operation(this.buffer.retry);
+    const operation = retry.operation(this.buffer.retry)
 
-    const partitionKey = this.partitionKey();
+    const partitionKey = this.partitionKey()
 
     const formattedRecords = records.map((record) => {
       // , PartitionKey: partitionKey
-      return { Data: JSON.stringify(record) };
-    });
+      return { Data: JSON.stringify(record) }
+    })
 
     operation.attempt(() => {
       this.putRecords(formattedRecords, (err) => {
@@ -73,10 +70,10 @@ class FirehoseStream extends Writable {
         }
 
         if (cb) {
-          return cb(err ? operation.mainError() : null);
+          return cb(err ? operation.mainError() : null)
         }
-      });
-    });
+      })
+    })
   }
 
   parseChunk(chunk) {
@@ -92,31 +89,37 @@ class FirehoseStream extends Writable {
   }
 
   write(chunk, enc, next) {
-    chunk = this.parseChunk(chunk);
+    chunk = this.parseChunk(chunk)
 
-    const hasPriority = this.hasPriority(chunk);
+    const hasPriority = this.hasPriority(chunk)
 
     if (hasPriority) {
-      this.recordsQueue.unshift(chunk);
+      this.recordsQueue.unshift(chunk)
+
     } else {
-      this.recordsQueue.push(chunk);
+      this.recordsQueue.push(chunk)
+
     }
 
     if (this.timer) {
-      clearTimeout(this.timer);
+      clearTimeout(this.timer)
     }
 
     if (this.recordsQueue.length >= this.buffer.length || hasPriority) {
-      this.flush();
+      this.flush()
+
     } else {
-      this.timer = setTimeout(this.flush.bind(this), this.buffer.timeout * 1000);
+      this.timer = setTimeout(this.flush.bind(this), this.buffer.timeout * 1000)
+
     }
 
-    if (next) return next();
+    if (next) {
+      return next()
+    }
   }
 
   flush() {
-    this.dispatch(this.recordsQueue.splice(0, this.buffer.length));
+    this.dispatch(this.recordsQueue.splice(0, this.buffer.length))
   }
 
   putRecords(records, cb) {
@@ -125,11 +128,15 @@ class FirehoseStream extends Writable {
       Records: records
     }, cb)
 
-    // remove all listeners which end up leaking
     req.on('complete', function () {
+      if (req.error) {
+        throw new Error(req.error.message)
+      }
+
+      // remove all listeners which end up leaking
       req.removeAllListeners()
-      // req.response.httpResponse.stream.removeAllListeners();
-      // req.httpRequest.stream.removeAllListeners();
+      req.response.httpResponse.stream.removeAllListeners()
+      req.httpRequest.stream.removeAllListeners()
     })
   }
 

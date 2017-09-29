@@ -2,15 +2,16 @@
 
 const bunyan         = require('bunyan')
 const bunyanFirehose = require('./src')
+const AWS            = require('aws-sdk')
 
 const config = {
-  streamName: 'logs-stream',
-  region:     'eu-west-1',
-  credentials: {
+  streamName:  'logs-stream',
+  region:      'eu-west-1',
+  credentials: new AWS.Credentials({
     accessKeyId:     '<ACCESS_KEY_ID',
     secretAccessKey: '<SECRET_ACCESS_KEY>',
     sessionToken:    '<SESSION_TOKEN>'
-  }
+  })
 }
 
 function createLogger(name) {
@@ -37,7 +38,7 @@ function createLogger(name) {
   const logger = createLogger('Firehose Demo App')
 
   const msg  = 'Well hello there, firehose!'
-  const data = { bla: 'bla bla' }
+  const data = { demo: 'data' }
 
   logger.info({ msg, data })
   logger.info('Simple strings are converted to objects in bunyan')
