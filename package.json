@@ -1,6 +1,6 @@
 {
   "name": "bunyan-firehose",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "An AWS Firehose extension for the Bunyan logger",
   "main": "index.js",
   "scripts": {

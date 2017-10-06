@@ -129,8 +129,14 @@ class FirehoseStream extends Writable {
     }, cb)
 
     req.on('complete', function () {
+      // NOTE: Handle connection error
       if (req.error) {
-        throw new Error(req.error.message)
+        throw new Error(req.error)
+      }
+
+      // NOTE: Handle error in service response
+      if (req.response.error) {
+        throw new Error(req.response.error)
       }
 
       // remove all listeners which end up leaking
