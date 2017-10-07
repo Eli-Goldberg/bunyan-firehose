@@ -1,35 +1,46 @@
-const bunyan = require('bunyan');
-const { createFirehoseStream } = require('./src');
+'use strict'
 
-const firehoseConfig = {
-  accessKeyId: '<YOUR-ACCESS_KEY_ID',
-  secretAccessKey: '<YOUR_SECRET_ACCESS_KEY>',
-  streamName: 'logs-stream',
-  region: 'eu-west-1'
-};
+const bunyan         = require('bunyan')
+const bunyanFirehose = require('./src')
+const AWS            = require('aws-sdk')
+
+const config = {
+  streamName:  'logs-stream',
+  region:      'eu-west-1',
+  credentials: new AWS.Credentials({
+    accessKeyId:     '<ACCESS_KEY_ID',
+    secretAccessKey: '<SECRET_ACCESS_KEY>',
+    sessionToken:    '<SESSION_TOKEN>'
+  })
+}
 
 function createLogger(name) {
-  if (!name) throw new Error(`Missing 'name' in config`);
-  const firehoseStream = createFirehoseStream(firehoseConfig);
-  firehoseStream.on('error', (err) => {
-    console.error(`Firehose log error: `, err);
-  });
+  if (!name) throw new Error(`Missing 'name' in config`)
+
+  const stream = bunyanFirehose.createStream(config)
+
+  stream.on('error', (err) => console.error(`Firehose log error: `, err))
 
   const loggerConfig = {
-    name: name,
-    level: 'info',
+    name:        name,
+    level:       'info',
     serializers: bunyan.stdSerializers,
     streams: [
       { stream: process.stdout, level: 'info' },
-      { stream: firehoseStream, type: 'raw' }
+      { stream, type: 'raw' }
     ]
-  };
-  return bunyan.createLogger(loggerConfig);
+  }
+
+  return bunyan.createLogger(loggerConfig)
 }
 
 (function() {
-  const logger = createLogger('My App');
-  logger.info({ msg: 'Well hello there, firehose !', data: { bla: 'bla bla' } });
-  logger.info('simple strings are converted to objects in bunyan');
-  logger.warn('A warning');
-})();
+  const logger = createLogger('Firehose Demo App')
+
+  const msg  = 'Well hello there, firehose!'
+  const data = { demo: 'data' }
+
+  logger.info({ msg, data })
+  logger.info('Simple strings are converted to objects in bunyan')
+  logger.warn('This is a warning')
+})()

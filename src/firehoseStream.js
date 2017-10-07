@@ -1,60 +1,63 @@
-const AWS = require('aws-sdk');
-const { Writable } = require('stream');
-const { merge } = require('lodash');
-const retry = require('retry');
+'use strict'
+
+const AWS          = require('aws-sdk')
+const { Writable } = require('stream')
+const { merge }    = require('lodash')
+const retry        = require('retry')
 
 const defaultBuffer = {
   timeout: 5,
-  length: 10,
-  hasPriority: function () {
-    return false;
-  },
+  length:  10,
   retry: {
-    retries: 2,
+    retries:    2,
     minTimeout: 300,
     maxTimeout: 500
+  },
+  hasPriority: function () {
+    return false
   }
-};
+}
 
 class FirehoseStream extends Writable {
-  constructor({ firehose, streamName, accessKeyId, secretAccessKey, region,
-    httpOptions, objectMode, buffer, partitionKey }) {
-    super({ objectMode });
-    this.streamName = streamName;
-    this.buffer = merge(defaultBuffer, buffer);
+  constructor({ firehose, streamName, region, credentials, httpOptions, objectMode, buffer, partitionKey }) {
+    super({ objectMode })
+
+    this.streamName   = streamName
+    this.buffer       = merge(defaultBuffer, buffer)
     this.partitionKey = partitionKey || function getPartitionKey() {
-      return Date.now().toString();
-    };
-
-    this.hasPriority = this.buffer.isPrioritaryMsg || this.buffer.hasPriority;
-
-    // increase the timeout to get credentials from the EC2 Metadata Service
-    AWS.config.credentials = new AWS.EC2MetadataCredentials({
-      httpOptions: httpOptions || { timeout: 5000 }
-    });
-
-    this.recordsQueue = [];
-
-    this.firehose = firehose || new AWS.Firehose({
-      accessKeyId,
-      secretAccessKey,
-      region,
-      httpOptions
-    });
-  }
-  dispatch(records, cb) {
-    if (records.length === 0) {
-      return cb ? cb() : null;
+      return Date.now().toString()
     }
 
-    const operation = retry.operation(this.buffer.retry);
+    this.hasPriority  = this.buffer.isPrioritaryMsg || this.buffer.hasPriority
+    this.recordsQueue = []
 
-    const partitionKey = this.partitionKey();
+    if (credentials) {
+      AWS.config.credentials = credentials
+
+    } else {
+      // increase the timeout to get credentials from the EC2 Metadata Service
+      AWS.config.credentials = new AWS.EC2MetadataCredentials({
+        httpOptions: httpOptions || { timeout: 5000 }
+      })
+
+    }
+
+    this.firehose = firehose || new AWS.Firehose({ region, httpOptions })
+  }
+
+  dispatch(records, cb) {
+    if (records.length === 0) {
+      return cb ? cb() : null
+    }
+
+    const operation = retry.operation(this.buffer.retry)
+
+    const partitionKey = this.partitionKey()
 
     const formattedRecords = records.map((record) => {
       // , PartitionKey: partitionKey
-      return { Data: JSON.stringify(record) };
-    });
+      return { Data: JSON.stringify(record) }
+    })
 
     operation.attempt(() => {
       this.putRecords(formattedRecords, (err) => {
@@ -67,71 +70,86 @@ class FirehoseStream extends Writable {
         }
 
         if (cb) {
-          return cb(err ? operation.mainError() : null);
+          return cb(err ? operation.mainError() : null)
         }
-      });
-    });
-  };
+      })
+    })
+  }
 
   parseChunk(chunk) {
     if (Buffer.isBuffer(chunk)) {
-      chunk = chunk.toString();
+      chunk = chunk.toString()
     }
+
     if (typeof chunk === 'string') {
-      chunk = JSON.parse(chunk);
+      chunk = JSON.parse(chunk)
     }
-    return chunk;
+
+    return chunk
   }
 
   write(chunk, enc, next) {
-    chunk = this.parseChunk(chunk);
+    chunk = this.parseChunk(chunk)
 
-    const hasPriority = this.hasPriority(chunk);
+    const hasPriority = this.hasPriority(chunk)
+
     if (hasPriority) {
-      this.recordsQueue.unshift(chunk);
+      this.recordsQueue.unshift(chunk)
+
     } else {
-      this.recordsQueue.push(chunk);
+      this.recordsQueue.push(chunk)
+
     }
 
     if (this.timer) {
-      clearTimeout(this.timer);
+      clearTimeout(this.timer)
     }
 
     if (this.recordsQueue.length >= this.buffer.length || hasPriority) {
-      this.flush();
+      this.flush()
+
     } else {
-      this.timer = setTimeout(this.flush.bind(this), this.buffer.timeout * 1000);
+      this.timer = setTimeout(this.flush.bind(this), this.buffer.timeout * 1000)
+
     }
 
-    if (next) return next();
+    if (next) {
+      return next()
+    }
   }
 
-  emitRecordError(err, records) {
-    err.records = records;
-    this.emit('error', err);
-  };
-
   flush() {
-    this.dispatch(this.recordsQueue.splice(0, this.buffer.length));
+    this.dispatch(this.recordsQueue.splice(0, this.buffer.length))
   }
 
   putRecords(records, cb) {
     const req = this.firehose.putRecordBatch({
       DeliveryStreamName: this.streamName,
       Records: records
-    }, cb);
+    }, cb)
 
-    // remove all listeners which end up leaking
     req.on('complete', function () {
-      req.removeAllListeners();
-      req.response.httpResponse.stream.removeAllListeners();
-      req.httpRequest.stream.removeAllListeners();
-    });
+      // NOTE: Handle connection error
+      if (req.error) {
+        throw new Error(req.error)
+      }
+
+      // NOTE: Handle error in service response
+      if (req.response.error) {
+        throw new Error(req.response.error)
+      }
+
+      // remove all listeners which end up leaking
+      req.removeAllListeners()
+      req.response.httpResponse.stream.removeAllListeners()
+      req.httpRequest.stream.removeAllListeners()
+    })
   }
+
   emitRecordError(err, records) {
-    err.records = records;
-    this.emit('error', err);
-  };
+    err.records = records
+    this.emit('error', err)
+  }
 }
 
-module.exports = FirehoseStream;
+module.exports = FirehoseStream

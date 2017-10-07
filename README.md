@@ -12,32 +12,39 @@ Installing
 Writeable stream
 ----------------
 
-    const bunyan = require('bunyan');
-    const { createFirehoseStream } = require('bunyan-firehose');
+    'use strict'
 
-    const firehoseConfig = {
-      accessKeyId: '<YOUR-ACCESS_KEY_ID',
-      secretAccessKey: '<YOUR_SECRET_ACCESS_KEY>',
-      streamName: 'logs-stream',
-      region: 'eu-west-1'
-    };
+    const bunyan         = require('bunyan')
+    const bunyanFirehose = require('./src')
+    const AWS            = require('aws-sdk')
 
-    const firehoseStream = createFirehoseStream(firehoseConfig);
-    firehoseStream.on('error', (err) => {
-      console.error(`Firehose log error: `, err);
-    });
+    const config = {
+      streamName:  'logs-stream',
+      region:      'eu-west-1',
+      credentials: new AWS.Credentials({
+        accessKeyId:     '<ACCESS_KEY_ID',
+        secretAccessKey: '<SECRET_ACCESS_KEY>',
+        sessionToken:    '<SESSION_TOKEN>'
+      })
+    }
 
-    const logger = bunyan.createLogger({
-      name: name,
-      level: 'info',
+    const stream = bunyanFirehose.createStream(config)
+
+    stream.on('error', (err) => console.error(`Firehose log error: `, err))
+
+    const loggerConfig = {
+      name:        'Firehose Demo App',
+      level:       'info',
       serializers: bunyan.stdSerializers,
       streams: [
         { stream: process.stdout, level: 'info' },
-        { stream: firehoseStream, type: 'raw'}
+        { stream, type: 'raw' }
       ]
-    });
+    }
 
-    logger.info({ msg: 'Writing info here', data: 'bla' });
-    logger.info('A regular string converted to json');
-    logger.warn('A simple warning');
+    const msg  = 'Well hello there, firehose!'
+    const data = { demo: 'data' }
 
+    logger.info({ msg, data })
+    logger.info('Simple strings are converted to objects in bunyan')
+    logger.warn('This is a warning')
