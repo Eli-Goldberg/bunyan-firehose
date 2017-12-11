@@ -19,11 +19,12 @@ const defaultBuffer = {
 }
 
 class FirehoseStream extends Writable {
-  constructor({ firehose, streamName, region, credentials, httpOptions, objectMode, buffer, partitionKey }) {
+  constructor({ firehose, streamName, region, credentials, httpOptions, objectMode, buffer, partitionKey, delimiter }) {
     super({ objectMode })
 
     this.streamName   = streamName
     this.buffer       = merge(defaultBuffer, buffer)
+    this.delimiter = delimiter || ''
     this.partitionKey = partitionKey || function getPartitionKey() {
       return Date.now().toString()
     }
@@ -56,7 +57,7 @@ class FirehoseStream extends Writable {
 
     const formattedRecords = records.map((record) => {
       // , PartitionKey: partitionKey
-      return { Data: JSON.stringify(record) }
+      return { Data: JSON.stringify(record) + this.delimiter }
     })
 
     operation.attempt(() => {
